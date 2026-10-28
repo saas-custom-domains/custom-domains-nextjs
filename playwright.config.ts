@@ -1,9 +1,19 @@
 import { defineConfig } from '@playwright/test'
 
-// Runs against `docker compose up`: the app on :3000 and the mock
-// proxy on :80, so http://<anything>.localhost goes through the proxy.
+const appPort = process.env.APP_PORT ?? '3000'
+const proxyPort = process.env.SCD_MOCK_PROXY_PORT ?? '80'
+
+// Runs against `docker compose up`. The browser sends every request
+// for a customer domain (*.test) to the mock proxy, the way DNS sends
+// a real customer domain to SaaS Custom Domains. Host and Origin stay
+// "acme.test" whatever port the mock listens on, so several stacks can
+// run side by side.
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 30_000,
-  use: { baseURL: 'http://localhost:3000', trace: 'retain-on-failure' },
+  use: {
+    baseURL: `http://localhost:${appPort}`,
+    proxy: { server: `http://127.0.0.1:${proxyPort}`, bypass: 'localhost' },
+    trace: 'retain-on-failure',
+  },
 })

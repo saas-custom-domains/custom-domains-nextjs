@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
 
-const proxy = (host: string) => `http://${host}`
+// Customer domains go through the mock proxy (see playwright.config.ts).
+const customerUrl = (host: string) => `http://${host}/`
 
 test('connect a domain, serve the site through the proxy, remove it', async ({
   page,
 }) => {
-  const host = `acme-${Date.now()}.localhost`
+  const host = `acme-${Date.now()}.test`
   const site = page.getByTestId('site-acme')
 
   await page.goto('/')
@@ -14,13 +15,13 @@ test('connect a domain, serve the site through the proxy, remove it', async ({
   const row = page.getByTestId(`domain-${host}`)
   await expect(row).toBeVisible()
 
-  // The mock marks *.localhost as pointed after ~2s and sends webhooks.
+  // The mock marks *.test as pointed after ~2s and sends webhooks.
   await expect(async () => {
     await page.reload()
     await expect(row).toContainText('Live')
   }).toPass({ timeout: 15_000 })
 
-  await page.goto(proxy(host))
+  await page.goto(customerUrl(host))
   await expect(page.getByRole('heading', { name: 'Acme Coffee' })).toBeVisible()
   await expect(page).toHaveTitle('Acme Coffee')
 
@@ -32,7 +33,7 @@ test('connect a domain, serve the site through the proxy, remove it', async ({
   await page.goto('/')
   await row.getByRole('button', { name: 'Remove' }).click()
   await expect(row).toBeHidden()
-  const gone = await page.goto(proxy(host))
+  const gone = await page.goto(customerUrl(host))
   expect(gone?.status()).toBe(404)
 })
 
@@ -63,13 +64,13 @@ test('requests that skip the proxy cannot claim a domain', async ({
   request,
 }) => {
   const spoofed = await request.get('/', {
-    headers: { 'X-Served-For': 'acme.localhost' },
+    headers: { 'X-Served-For': 'acme.test' },
   })
   expect(spoofed.status()).toBe(403)
 
   const wrongToken = await request.get('/', {
     headers: {
-      'X-Served-For': 'acme.localhost',
+      'X-Served-For': 'acme.test',
       'X-SaaS-Domains-Auth-Token': 'guess',
     },
   })
@@ -83,9 +84,7 @@ test('webhooks need the right token', async ({ request }) => {
   expect(res.status()).toBe(401)
 })
 
-// Browsers resolve *.localhost to 127.0.0.1; Node's resolver may not,
-// so requests to the proxy go through page.goto.
 test('unknown domains get a 404', async ({ page }) => {
-  const res = await page.goto(proxy('unknown.localhost'))
+  const res = await page.goto(customerUrl('unknown.test'))
   expect(res?.status()).toBe(404)
 })

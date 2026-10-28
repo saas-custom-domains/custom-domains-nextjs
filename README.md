@@ -100,6 +100,8 @@ npx playwright install chromium
 npm run test:e2e               # end to end, through the mock proxy
 ```
 
+The end-to-end tests use `*.test` domains and send the browser's requests for them to the mock proxy, so nothing depends on DNS or on port 80. To run a second stack side by side, set `APP_PORT`, `SCD_MOCK_API_PORT` and `SCD_MOCK_PROXY_PORT` for both `docker compose` and `npm run test:e2e`.
+
 CI runs both on every push and once a week, so a new Next.js release that breaks something shows up here first.
 
 ## Tested with

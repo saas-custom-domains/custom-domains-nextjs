@@ -8,7 +8,7 @@ What's in it:
 
 - `proxy.ts` finds the site from the request's hostname and rewrites to `/sites/[domain]`. Unknown and unverified domains get a 404.
 - Requests from the [SaaS Custom Domains](https://saascustomdomains.com) proxy are accepted only with the upstream's auth token, so nobody can claim a customer's domain by sending `X-Served-For` themselves.
-- Server Actions work on custom domains behind the proxy (see [Server Actions behind a proxy](#server-actions-behind-a-proxy)).
+- Server Actions on customer domains (see [Server Actions behind a proxy](#server-actions-behind-a-proxy)).
 - Site pages are cached per host with `'use cache'` and invalidated by tag when a domain changes.
 - A dashboard to add a domain, check its DNS and remove it. Webhooks update the status.
 - Two ways to run HTTPS: SaaS Custom Domains (default), or your own Caddy with on-demand TLS.
@@ -63,9 +63,11 @@ Browser ── acme.com ──▶ SaaS Custom Domains ──▶ your Next.js app
 
 ### Server Actions behind a proxy
 
-Next.js rejects a Server Action when the browser's `Origin` doesn't match `x-forwarded-host` (or `host`). Behind SaaS Custom Domains, `x-forwarded-host` is your app's own hostname, so actions on `acme.com` fail with "Invalid Server Actions request". `allowedOrigins` doesn't help, because it's a fixed list and your customers' domains aren't.
+SaaS Custom Domains forwards your app's own hostname in `Host` and `x-forwarded-host`, because that's what hosting platforms route on and what most apps expect. The customer's domain arrives in `x-served-for`.
 
-`proxy.ts` fixes it: once the auth token proves the request came through the proxy, it sets `x-forwarded-host` to the customer's domain before the action runs.
+Next.js checks Server Actions by comparing the browser's `Origin` with `x-forwarded-host` (or `host`). So if your customer-facing pages use Server Actions, Next.js needs to see the customer's domain, or it answers "Invalid Server Actions request". `allowedOrigins` doesn't fit, because it's a fixed list and your customers' domains aren't.
+
+`proxy.ts` handles it: once the auth token proves the request came through the proxy, it sets `x-forwarded-host` to the domain from `x-served-for` before the action runs.
 
 ## Run your own proxy instead (Caddy)
 

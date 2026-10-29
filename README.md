@@ -2,7 +2,7 @@
 
 An example Next.js 16 app where each customer connects their own domain. It's a small link-in-bio product, Linkpage: every site gets a page, and its owner can serve it on `links.theircompany.com` instead of a Linkpage URL.
 
-It goes with the guide [How to Add Custom Domains to a Next.js App](https://saascustomdomains.com/blog/posts/custom-domains-nextjs).
+It goes with the guide [How to Add Custom Domains to a Multi-Tenant Next.js App](https://saascustomdomains.com/blog/posts/custom-domains-nextjs).
 
 What's in it:
 
@@ -11,7 +11,7 @@ What's in it:
 - Server Actions on customer domains (see [Server Actions behind a proxy](#server-actions-behind-a-proxy)).
 - Site pages are cached per host with `'use cache'` and invalidated by tag when a domain changes.
 - A dashboard to add a domain, check its DNS and remove it. Webhooks update the status.
-- Two ways to run HTTPS: SaaS Custom Domains (default), or your own Caddy with on-demand TLS.
+- [SaaS Custom Domains](https://saascustomdomains.com) issues and renews every customer's TLS certificate and proxies their traffic to the app.
 
 ## Run it in 2 minutes
 
@@ -31,15 +31,18 @@ docker compose up --build
 
 The mock is [scd-mock](https://github.com/saas-custom-domains/scd-mock): a local copy of the SaaS Custom Domains API and proxy, so you can try everything without an account.
 
-### Without Docker
+### Run the app outside Docker
+
+Keep the mock in Docker and point it at your dev server:
 
 ```bash
+SCD_MOCK_UPSTREAM_HOST=host.docker.internal \
+SCD_MOCK_WEBHOOK_URL=http://host.docker.internal:3000/api/webhooks/saascustomdomains \
+  docker compose up scd-mock -d
 npm install
 cp .env.example .env.local
 npm run dev
 ```
-
-Add a domain such as `acme.localhost` and open http://acme.localhost:3000. Without the mock, set `DOMAINS_PROVIDER=caddy` in `.env.local` so adding a domain doesn't call the API; `*.localhost` domains count as pointed at you.
 
 ## How it works
 
@@ -56,10 +59,9 @@ Browser ── acme.com ──▶ SaaS Custom Domains ──▶ your Next.js app
 | `app/sites/[domain]/page.tsx` | The customer's site |
 | `app/sites/[domain]/actions.ts` | A Server Action that takes the site from the request, not the form |
 | `lib/sites.ts` | `getSite()` cached per host |
-| `lib/domain-service.ts` | Add, check and remove domains with either provider |
+| `lib/domain-service.ts` | Add, check and remove domains |
 | `lib/saas-domains.ts` | API client for SaaS Custom Domains |
 | `app/api/webhooks/saascustomdomains/route.ts` | Webhook endpoint |
-| `app/api/caddy/ask/route.ts` | Caddy's on-demand TLS check |
 
 ### Server Actions behind a proxy
 
@@ -68,20 +70,6 @@ SaaS Custom Domains forwards your app's own hostname in `Host` and `x-forwarded-
 Next.js checks Server Actions by comparing the browser's `Origin` with `x-forwarded-host` (or `host`). So if your customer-facing pages use Server Actions, Next.js needs to see the customer's domain, or it answers "Invalid Server Actions request". `allowedOrigins` doesn't fit, because it's a fixed list and your customers' domains aren't.
 
 `proxy.ts` handles it: once the auth token proves the request came through the proxy, it sets `x-forwarded-host` to the domain from `x-served-for` before the action runs.
-
-## Run your own proxy instead (Caddy)
-
-```bash
-DOMAINS_PROVIDER=caddy docker compose --profile diy up --build
-```
-
-Add `acme.localhost` in the dashboard, then:
-
-```bash
-curl -k https://acme.localhost/
-```
-
-Caddy asks `/api/caddy/ask` before issuing a certificate, and only active domains get one. Locally it uses Caddy's internal CA, hence `-k`. In production you'd remove `internal` from the `Caddyfile`, run it on a server with a static IP, and then own certificate storage, renewals, rate limits and monitoring yourself.
 
 ## Use it with your SaaS Custom Domains account
 
